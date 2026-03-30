@@ -713,7 +713,7 @@ def prompt_artefatos() -> str:
 # Pipeline principal
 # ============================================================
 
-def processar_video(caminho_video: str, modelo: str, nome_nivel: str, nivel: float, aprimoramento: str = "nenhum") -> str | None:
+def processar_video(caminho_video: str, modelo: str, nome_nivel: str, nivel: float, aprimoramento: str = "nenhum", pasta_saida: str = None) -> str | None:
     """
     Pipeline completo de processamento.
     Retorna o caminho do arquivo de saída ou None se cancelado.
@@ -722,7 +722,12 @@ def processar_video(caminho_video: str, modelo: str, nome_nivel: str, nivel: flo
     pasta_video = os.path.dirname(caminho_video)
     nome_base = Path(caminho_video).stem
     extensao = Path(caminho_video).suffix
-    caminho_saida = os.path.join(pasta_video, f"{nome_base}_limpo{extensao}")
+    
+    if pasta_saida:
+        os.makedirs(pasta_saida, exist_ok=True)
+        caminho_saida = os.path.join(pasta_saida, f"{nome_base}_limpo{extensao}")
+    else:
+        caminho_saida = os.path.join(pasta_video, f"{nome_base}_limpo{extensao}")
 
     # Criar diretório temporário
     dir_temp = tempfile.mkdtemp(prefix="limpar_audio_")
@@ -816,7 +821,7 @@ def processar_video(caminho_video: str, modelo: str, nome_nivel: str, nivel: flo
                             console.print("\n🔄 Reprocessando com nível suave...\n")
                             cleanup_temp_files()
                             TEMP_FILES.clear()
-                            return processar_video(caminho_video, modelo, "suave", 0.4, aprimoramento)
+                            return processar_video(caminho_video, modelo, "suave", 0.4, aprimoramento, pasta_saida)
 
                         elif acao == "3":
                             console.print("\n❌ Processamento cancelado.", style="red")
@@ -844,6 +849,125 @@ def processar_video(caminho_video: str, modelo: str, nome_nivel: str, nivel: flo
 # Main
 # ============================================================
 
+def menu_escolher_pasta() -> str:
+    """Menu para listar pastas locais ou receber um caminho absoluto."""
+    console.print("\n[bold white]📂 Procurando pastas no diretório atual...[/bold white]")
+    # Listar diretórios válidos na pasta atual (ignorando ocultas e venv)
+    pastas = []
+    base_dir = os.getcwd()
+    try:
+        for entry in os.scandir(base_dir):
+            if entry.is_dir() and not entry.name.startswith("."):
+                pastas.append(entry.path)
+    except Exception as e:
+        pass
+    
+    pastas.sort()
+    
+    if pastas:
+        table = Table(box=box.MINIMAL, show_header=False)
+        table.add_column("Num", style="cyan", justify="right")
+        table.add_column("Pasta", style="white")
+        for i, p in enumerate(pastas):
+            table.add_row(f"[{i+1}]", Path(p).name)
+        console.print(table)
+        console.print("\nDigite o número da lista acima, ou digite um [yellow]caminho absoluto[/yellow] se a sua pasta estiver em outro lugar.")
+    else:
+        console.print("  Nenhuma pasta compatível visualizada. Digite o [yellow]caminho absoluto[/yellow] dos vídeos.")
+
+    escolha = Prompt.ask("  Sua escolha (número ou caminho)")
+    
+    if escolha.isdigit() and 1 <= int(escolha) <= len(pastas):
+        return pastas[int(escolha)-1]
+    
+    # Assumir que é um caminho escrito
+    escolha_limpa = escolha.strip('"').strip("'")
+    if os.path.isdir(escolha_limpa):
+        return os.path.abspath(escolha_limpa)
+    else:
+        console.print(f"❌ Diretório não encontrado: [white]{escolha_limpa}[/white]\n", style="red")
+        sys.exit(1)
+
+
+def fluxo_lote():
+    """Gerencia o processamento em lote para mutiplos arquivos."""
+    pasta_alvo = menu_escolher_pasta()
+    
+    videos = []
+    for f in os.listdir(pasta_alvo):
+        caminho_completo = os.path.join(pasta_alvo, f)
+        if os.path.isfile(caminho_completo) and Path(f).suffix.lower() in SUPPORTED_FORMATS:
+            videos.append(caminho_completo)
+            
+    if not videos:
+        console.print(f"❌ Nenhum vídeo suportado encontrado em: [white]{pasta_alvo}[/white]\n", style="red")
+        sys.exit(1)
+        
+    console.print(f"\n[bold green]Encontrados {len(videos)} vídeos na pasta para processar![/bold green]")
+    
+    modelo = menu_modelo()
+    nome_nivel, nivel = menu_nivel()
+    aprimoramento = menu_aprimoramento()
+    
+    pasta_processados = os.path.join(pasta_alvo, "processados")
+    
+    aprimoramento_label = {
+        "nenhum": "NENHUM", "broadcast": "BROADCAST",
+        "resemble": "RESEMBLE IA", "maximo": "MÁXIMO"
+    }
+    
+    console.print()
+    console.print(
+        f"[bold]⏳ Iniciando processamento em Lote ({len(videos)} arquivos)...[/bold]\n"
+        f"   Destino: [cyan]{pasta_processados}[/cyan]\n"
+        f"   Modelo: [cyan]{modelo.upper()}[/cyan] | "
+        f"Nível: [cyan]{nome_nivel.upper()}[/cyan] | "
+        f"Voz: [cyan]{aprimoramento_label.get(aprimoramento, aprimoramento.upper())}[/cyan]\n"
+    )
+    
+    inicio_lote = time.time()
+    sucessos = 0
+    falhas = 0
+    
+    for i, cod_vid in enumerate(videos, 1):
+        nome_arq = Path(cod_vid).name
+        console.print(f"\n[bold blue]▶ Processando ({i}/{len(videos)}):[/bold blue] {nome_arq}")
+        
+        # Verificar disco por vídeo avulso (usando a constante multiplicadora leve do processo atual)
+        if not verificar_espaco_disco(cod_vid):
+            console.print(f"❌ Abortando processamento em lote devido a espaço insuficiente no HD.\n", style="red")
+            break
+            
+        try:
+            req_info = obter_info_video(cod_vid)
+            exibir_info_video(req_info)
+            res = processar_video(cod_vid, modelo, nome_nivel, nivel, aprimoramento, pasta_saida=pasta_processados)
+            cleanup_temp_files()
+            if res:
+                sucessos += 1
+            else:
+                falhas += 1
+        except Exception as e:
+            logger.error(f"Falha ao processar {cod_vid} em lote: {e}")
+            console.print(f"❌ Falha inesperada no vídeo {nome_arq}. Pulando...\n", style="red")
+            cleanup_temp_files()
+            falhas += 1
+            continue
+            
+    tempo_lote = time.time() - inicio_lote
+    console.print()
+    console.print(Panel(
+        f"[bold green]🏁 Lote Concluído![/bold green]\n\n"
+        f"   ✅ Sucessos: [green]{sucessos}[/green]\n"
+        f"   ❌ Falhas: [red]{falhas}[/red]\n"
+        f"   ⏱️  Tempo total: [white]{formatar_duracao(tempo_lote)}[/white]\n"
+        f"   📁 Salvos em: [white]{pasta_processados}[/white]",
+        style="blue",
+        box=box.DOUBLE,
+        padding=(1, 2),
+    ))
+
+
 def main():
     """Ponto de entrada principal."""
     # Banner
@@ -852,12 +976,21 @@ def main():
     # Validar argumento
     if len(sys.argv) < 2:
         console.print("❌ Nenhum arquivo especificado.\n", style="red")
-        console.print("   Uso: [cyan]limpar_audio.bat seu_video.mp4[/cyan]\n")
+        console.print("   Uso: [cyan]limpar_audio.bat seu_video.mp4[/cyan] ou [cyan]limpar_audio.bat -l[/cyan] para lote\n")
         sys.exit(1)
 
-    caminho_video = sys.argv[1]
+    caminho_input = sys.argv[1]
 
-    # Validar arquivo
+    if caminho_input in ("-l", "--lote"):
+        # Fluxo de lote bloqueia aqui ate o modulo encerrar.
+        if not verificar_ffmpeg():
+            console.print("❌ FFmpeg não encontrado. Execute [cyan]setup.bat[/cyan] primeiro.\n", style="red")
+            sys.exit(1)
+        fluxo_lote()
+        sys.exit(0)
+
+    # Validar arquivo no modo unitário
+    caminho_video = caminho_input
     if not os.path.isfile(caminho_video):
         console.print(f"❌ Arquivo não encontrado: [white]{caminho_video}[/white]\n", style="red")
         sys.exit(1)

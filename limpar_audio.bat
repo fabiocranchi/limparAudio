@@ -46,7 +46,8 @@ exit /b 1
 echo.
 echo [ERRO] Nenhum arquivo especificado.
 echo.
-echo        Uso: limpar_audio.bat seu_video.mp4
+echo        Uso Normal: limpar_audio.bat seu_video.mp4
+echo        Uso em Lote: limpar_audio.bat -l (selecione multiplos arquivos)
 echo.
 pause
 exit /b 1

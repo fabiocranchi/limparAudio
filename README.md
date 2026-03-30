@@ -23,10 +23,18 @@ Isso irá:
 
 ### 2. Pronto! Use assim:
 
+#### Processamento Unitário
 Basta arrastar o arquivo de vídeo original sobre o arquivo **`limpar_audio.bat`**, ou execute no terminal com o caminho do vídeo:
 ```bat
 limpar_audio.bat seu_video.mp4
 ```
+
+#### Processamento em Lote (Novidade)
+Para varrer múltiplos vídeos, limpando e aprimorando todos de uma só vez com as mesmas configurações, use o parâmetro `-l` (ou `--lote`):
+```bat
+limpar_audio.bat -l
+```
+O menu pedirá para você escolher a pasta de origem e todos os vídeos prontos serão criados em uma subpasta chamada `processados`.
 
 ## 🎯 Como o Pipeline Funciona
 
