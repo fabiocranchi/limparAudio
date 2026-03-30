@@ -71,6 +71,11 @@ seu_video.mp4
      │
      ▼
 ┌─────────────┐
+│ Ajuste Tonal│──► Equalização (Graves/Agudos) predefinida em 7 Níveis
+└─────────────┘
+     │
+     ▼
+┌─────────────┐
 │   FFmpeg    │──► Junta vídeo original + O NOVO Áudio (AAC de alta taxa: >220kbps)
 └─────────────┘
      │
@@ -94,13 +99,23 @@ seu_video.mp4
 | 🟡 **Médio** | Equilíbrio entre limpeza e naturalidade |
 | 🔴 **Agressivo** | Máxima remoção de ruído |
 
-### Aprimoramento de Voz (Novo! - Passo 3)
-| Opção | Benefício | Custo de Tempo |
+### Aprimoramento de Voz (Passo 3)
+| Modo | Descrição | Demanda de HD Space |
 |---|---|---|
-| 🔇 **Nenhum** | Apenas passa pelo filtro de ruído | Instantâneo |
-| 🎛️ **Broadcast** | Tratamento clássico (EQ 300Hz e 3kHz, Compressor de dinâmica) | Instantâneo |
-| 🧠 **Resemble Enhance** | IA avança para recuperar brilho da voz e resolução de estúdio | ~4 a 10 min |
-| 🌟 **Máximo** | Resemble + Broadcast na sequência | ~4 a 10 min |
+| **Nenhum** | Apenas reduz o ruído conforme passo 1 e 2 | (Sem custo) |
+| **Broadcast** | Adiciona processamento dinâmico (Compressão + De-esser + EBU R128) | ~1 GB |
+| **Resemble IA** | Regeneração neural da voz (*Enhancement* pesado) | ~2 GB a 3 GB |
+| **Máximo** | Resemble IA + Cadeia Broadcast juntos | ~4 GB |
+
+### Equalização Paramétrica (Passo 4)
+*Permite ajustes pontuais no 'corpo' da voz.*
+1. **Extremo Grave** *(Voz de Rádio AM)*
+2. **Muito Grave** 
+3. **Grave**
+4. **Neutro** *(Padrão, Flat)*
+5. **Agudo** *(Clareza adicionada)*
+6. **Muito Agudo**
+7. **Extremo Agudo** *(Abre microfones abafados)*
 
 ## 📋 Requisitos do Sistema
 

@@ -521,6 +521,75 @@ def processar_broadcast(caminho_audio: str, caminho_saida: str) -> None:
     logger.info("Cadeia broadcast concluída.")
 
 
+def aplicar_eq(caminho_audio: str, caminho_saida: str, preset: str) -> None:
+    """Aplica equalização de 7 níveis pré-determinados baseados em graves e agudos."""
+    logger.info(f"Aplicando equalização (preset: {preset}): {caminho_audio}")
+    
+    from scipy.signal import iirpeak, lfilter
+    audio, sr = sf.read(caminho_audio, dtype='float32')
+    is_stereo = len(audio.shape) > 1 and audio.shape[1] == 2
+    nyquist = sr / 2
+    
+    # Frequências centrais para a voz
+    freq_grave = 150 / nyquist
+    freq_agudo = 4500 / nyquist
+    
+    if freq_grave >= 1.0 or freq_agudo >= 1.0:
+        sf.write(caminho_saida, audio, sr)
+        return
+
+    ganho_grave = 0.0
+    ganho_agudo = 0.0
+    
+    if preset == "1": # Extremo Grave
+        ganho_grave = 0.6  
+        ganho_agudo = -0.3 
+    elif preset == "2": # Muito Grave
+        ganho_grave = 0.4
+        ganho_agudo = -0.15
+    elif preset == "3": # Grave
+        ganho_grave = 0.25
+        ganho_agudo = 0.0
+    elif preset == "4": # Neutro
+        ganho_grave = 0.0
+        ganho_agudo = 0.0
+    elif preset == "5": # Agudo
+        ganho_grave = 0.0
+        ganho_agudo = 0.25
+    elif preset == "6": # Muito Agudo
+        ganho_grave = -0.15
+        ganho_agudo = 0.4
+    elif preset == "7": # Extremo Agudo
+        ganho_grave = -0.3
+        ganho_agudo = 0.6
+        
+    if ganho_grave == 0.0 and ganho_agudo == 0.0:
+        sf.write(caminho_saida, audio, sr)
+        return
+        
+    b_grave, a_grave = iirpeak(freq_grave, 0.7) 
+    b_agudo, a_agudo = iirpeak(freq_agudo, 0.7)
+
+    def process_channel(ch):
+        if ganho_grave != 0.0:
+            ch_g = lfilter(b_grave, a_grave, ch)
+            ch = ch + ganho_grave * ch_g
+        if ganho_agudo != 0.0:
+            ch_a = lfilter(b_agudo, a_agudo, ch)
+            ch = ch + ganho_agudo * ch_a
+        ch = np.clip(ch, -0.99, 0.99)
+        return ch
+        
+    if is_stereo:
+        audio[:, 0] = process_channel(audio[:, 0])
+        audio[:, 1] = process_channel(audio[:, 1])
+    else:
+        audio = process_channel(audio)
+        
+    sf.write(caminho_saida, audio, sr)
+    logger.info("Equalização concluída.")
+
+
 def detectar_artefatos(caminho_audio: str) -> tuple[bool, float]:
     """
     Detecta possíveis artefatos metálicos no áudio usando spectral flatness.
@@ -687,6 +756,27 @@ def menu_aprimoramento() -> str:
     return modos[escolha]
 
 
+def menu_eq() -> str:
+    """Menu para escolher a equalização."""
+    console.print()
+    console.print("[bold white]🎛️  Ajuste de Equalização (Graves e Agudos):[/bold white]")
+    console.print("  [cyan][1][/cyan] Extremo Grave   (+Grave, -Agudo) [dim]Voz de rádio AM pesada[/dim]")
+    console.print("  [cyan][2][/cyan] Muito Grave     (+Grave)")
+    console.print("  [cyan][3][/cyan] Grave           (Leve reforço)")
+    console.print("  [green][4][/green] Neutro          (Som original sem ajustes)")
+    console.print("  [cyan][5][/cyan] Agudo           (Leve reforço de clareza)")
+    console.print("  [cyan][6][/cyan] Muito Agudo     (+Agudo, -Grave)")
+    console.print("  [cyan][7][/cyan] Extremo Agudo   (+Agudo, -Grave) [dim]Para microfones abafados[/dim]")
+    console.print()
+
+    escolha = Prompt.ask(
+        "  Sua escolha",
+        choices=["1", "2", "3", "4", "5", "6", "7"],
+        default="4"
+    )
+    return escolha
+
+
 def prompt_artefatos() -> str:
     """Pergunta ao usuário o que fazer quando artefatos são detectados."""
     console.print()
@@ -713,7 +803,7 @@ def prompt_artefatos() -> str:
 # Pipeline principal
 # ============================================================
 
-def processar_video(caminho_video: str, modelo: str, nome_nivel: str, nivel: float, aprimoramento: str = "nenhum", pasta_saida: str = None) -> str | None:
+def processar_video(caminho_video: str, modelo: str, nome_nivel: str, nivel: float, aprimoramento: str = "nenhum", eq_preset: str = "4", pasta_saida: str = None) -> str | None:
     """
     Pipeline completo de processamento.
     Retorna o caminho do arquivo de saída ou None se cancelado.
@@ -738,9 +828,10 @@ def processar_video(caminho_video: str, modelo: str, nome_nivel: str, nivel: flo
     caminho_nr = os.path.join(dir_temp, "audio_noisereduced.wav")
     caminho_resemble = os.path.join(dir_temp, "audio_resemble.wav")
     caminho_broadcast = os.path.join(dir_temp, "audio_broadcast.wav")
+    caminho_eq = os.path.join(dir_temp, "audio_eq.wav")
     caminho_final = os.path.join(dir_temp, "audio_final.wav")
 
-    TEMP_FILES.extend([caminho_wav, caminho_nr, caminho_resemble, caminho_broadcast, caminho_final])
+    TEMP_FILES.extend([caminho_wav, caminho_nr, caminho_resemble, caminho_broadcast, caminho_eq, caminho_final])
 
     # Determinar etapas
     etapas = []
@@ -759,6 +850,9 @@ def processar_video(caminho_video: str, modelo: str, nome_nivel: str, nivel: flo
 
     if aprimoramento in ("broadcast", "maximo"):
         etapas.append(("Processando cadeia broadcast", "broadcast"))
+
+    if eq_preset != "4":
+        etapas.append(("Aplicando equalização tonal", "eq"))
 
     etapas.append(("Remontando vídeo", "merge"))
 
@@ -808,6 +902,10 @@ def processar_video(caminho_video: str, modelo: str, nome_nivel: str, nivel: flo
                     processar_broadcast(audio_atual, caminho_broadcast)
                     audio_atual = caminho_broadcast
 
+                elif tipo == "eq":
+                    aplicar_eq(audio_atual, caminho_eq, eq_preset)
+                    audio_atual = caminho_eq
+
                 elif tipo == "merge":
                     # Detectar artefatos antes do merge
                     tem_artefatos, score = detectar_artefatos(audio_atual)
@@ -821,7 +919,7 @@ def processar_video(caminho_video: str, modelo: str, nome_nivel: str, nivel: flo
                             console.print("\n🔄 Reprocessando com nível suave...\n")
                             cleanup_temp_files()
                             TEMP_FILES.clear()
-                            return processar_video(caminho_video, modelo, "suave", 0.4, aprimoramento, pasta_saida)
+                            return processar_video(caminho_video, modelo, "suave", 0.4, aprimoramento, eq_preset, pasta_saida=pasta_saida)
 
                         elif acao == "3":
                             console.print("\n❌ Processamento cancelado.", style="red")
@@ -908,6 +1006,7 @@ def fluxo_lote():
     modelo = menu_modelo()
     nome_nivel, nivel = menu_nivel()
     aprimoramento = menu_aprimoramento()
+    eq_preset = menu_eq()
     
     pasta_processados = os.path.join(pasta_alvo, "processados")
     
@@ -922,7 +1021,8 @@ def fluxo_lote():
         f"   Destino: [cyan]{pasta_processados}[/cyan]\n"
         f"   Modelo: [cyan]{modelo.upper()}[/cyan] | "
         f"Nível: [cyan]{nome_nivel.upper()}[/cyan] | "
-        f"Voz: [cyan]{aprimoramento_label.get(aprimoramento, aprimoramento.upper())}[/cyan]\n"
+        f"Voz: [cyan]{aprimoramento_label.get(aprimoramento, aprimoramento.upper())}[/cyan] | "
+        f"EQ: [cyan]{eq_preset}[/cyan]\n"
     )
     
     inicio_lote = time.time()
@@ -941,7 +1041,7 @@ def fluxo_lote():
         try:
             req_info = obter_info_video(cod_vid)
             exibir_info_video(req_info)
-            res = processar_video(cod_vid, modelo, nome_nivel, nivel, aprimoramento, pasta_saida=pasta_processados)
+            res = processar_video(cod_vid, modelo, nome_nivel, nivel, aprimoramento, eq_preset, pasta_saida=pasta_processados)
             cleanup_temp_files()
             if res:
                 sucessos += 1
@@ -1028,6 +1128,7 @@ def main():
     modelo = menu_modelo()
     nome_nivel, nivel = menu_nivel()
     aprimoramento = menu_aprimoramento()
+    eq_preset = menu_eq()
 
     # Confirmar
     aprimoramento_label = {
@@ -1039,12 +1140,13 @@ def main():
         f"[bold]⏳ Iniciando processamento...[/bold]\n"
         f"   Modelo: [cyan]{modelo.upper()}[/cyan] | "
         f"Nível: [cyan]{nome_nivel.upper()}[/cyan] | "
-        f"Voz: [cyan]{aprimoramento_label.get(aprimoramento, aprimoramento.upper())}[/cyan]\n"
+        f"Voz: [cyan]{aprimoramento_label.get(aprimoramento, aprimoramento.upper())}[/cyan] | "
+        f"EQ: [cyan]{eq_preset}[/cyan]\n"
     )
 
     # Processar
     inicio = time.time()
-    caminho_saida = processar_video(caminho_video, modelo, nome_nivel, nivel, aprimoramento)
+    caminho_saida = processar_video(caminho_video, modelo, nome_nivel, nivel, aprimoramento, eq_preset)
     tempo_total = time.time() - inicio
 
     # Limpeza de temporários
