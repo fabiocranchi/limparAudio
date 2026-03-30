@@ -1,0 +1,16 @@
+# Ambientes virtuais e pacotes
+.venv/
+__pycache__/
+*.pyc
+
+# Arquivos de log e testes locais
+*.log
+*.mp4
+*.mkv
+*.webm
+*.MOV
+
+# Pastas de IDE e caches nativos
+.vscode/
+.idea/
+.cache/
