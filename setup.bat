@@ -18,11 +18,26 @@ python --version >nul 2>&1
 if errorlevel 1 (
     echo.
     echo  Python nao encontrado no PATH.
-    echo    Instale Python 3.10+ em https://www.python.org/downloads/
-    echo    Marque "Add Python to PATH" durante a instalacao.
-    echo.
-    pause
-    exit /b 1
+    echo    Tentando instalar Python 3.12 via winget...
+    
+    winget install --id Python.Python.3.12 -e --accept-package-agreements --accept-source-agreements >nul 2>&1
+    if errorlevel 1 (
+        echo.
+        echo     Nao foi possivel instalar Python automaticamente.
+        echo    Instale Python 3.10+ manualmente em https://www.python.org/downloads/
+        echo    Lembre-se de marcar "Add Python to PATH" na instalacao.
+        echo.
+        pause
+        exit /b 1
+    ) else (
+        echo.
+        echo     Python 3.12 instalado com sucesso!
+        echo      ATENCAO: E necessario aplicar a variavel PATH.
+        echo      Por favor, feche este terminal, abra novamente e rode setup.bat.
+        echo.
+        pause
+        exit /b 0
+    )
 )
 
 for /f "tokens=2 delims= " %%v in ('python --version 2^>^&1') do set PYTHON_VERSION=%%v

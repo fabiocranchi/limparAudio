@@ -15,10 +15,11 @@ setup.bat
 ```
 
 Isso irá:
+- Verificar e instalar **Python 3.12** automaticamente caso não seja encontrado.
 - Criar um ambiente virtual Python (`.venv`) autônomo.
 - Instalar todas as dependências complexas (Demucs, PyTorch, noisereduce).
 - Baixar o módulo modificado **Resemble Enhance AI** que ignora compilações nativas de Linux no Windows.
-- Verificar e instalar FFmpeg se necessário.
+- Verificar e instalar **FFmpeg** se necessário.
 
 ### 2. Pronto! Use assim:
 
@@ -96,7 +97,7 @@ seu_video.mp4
 ## 📋 Requisitos do Sistema
 
 - **Windows 10 ou 11**
-- **Python 3.10+** (Garantido em Python 3.13 e compatível com fallback para 3.12 usando Pyenv via Setup)
+- **Python 3.10+** (Instalado automaticamente via Winget se você não o possui; compatível também com fallback para 3.12 usando Pyenv via Setup)
 - **FFmpeg** (Instalado automaticamente via Winget se você não o possui)
 - **CPU Módica e ~4 GB espaço no disco** (Para download automático do Modelo de IA de Resemble e Demucs durante o primeiro uso da função).
 
